@@ -12,5 +12,6 @@
 void blink_led(void);
 void configure_led(void);
 
-extern uint8_t s_led_state;
+uint8_t get_led_state();
+void toggle_led_state();
 #endif

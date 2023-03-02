@@ -6,20 +6,30 @@ uint8_t s_led_state = 0;
 */
 #define BLINK_GPIO CONFIG_BLINK_GPIO
 
+uint8_t get_led_state()
+{
+    return s_led_state;
+}
+void toggle_led_state()
+{
+    s_led_state = !s_led_state;
+}
 #ifdef CONFIG_BLINK_LED_RMT
-
 
 static led_strip_handle_t led_strip;
 
 void blink_led(void)
 {
     /* If the addressable LED is enabled */
-    if (s_led_state) {
+    if (s_led_state)
+    {
         /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
         led_strip_set_pixel(led_strip, 0, 16, 16, 16);
         /* Refresh the strip to send data */
         led_strip_refresh(led_strip);
-    } else {
+    }
+    else
+    {
         /* Set all LED off to clear all pixels */
         led_strip_clear(led_strip);
     }
