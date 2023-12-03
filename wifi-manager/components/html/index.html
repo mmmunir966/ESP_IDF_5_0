@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Setup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #wifi-setup-container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
+        }
+
+        #logo {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4caf50;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #network-list {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        #network-list select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        #ssid {
+            margin-bottom: 16px;
+            /* Add margin at the bottom */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="wifi-setup-container">
+        <img id="logo" src="logo.png" alt="Logo">
+
+        <h2>WiFi Setup</h2>
+
+        <div id="network-list">
+            <label for="available-networks">Available Networks:</label>
+            <select id="available-networks" onchange="updateSSIDField()"></select>
+        </div>
+        <div>
+            <input type="text" id="ssid" placeholder="Select SSID from list or enter manually">
+            <input type="password" id="password" placeholder="Enter password manually">
+        </div>
+        <button onclick="updateWiFiSettings()">Update WiFi Settings</button>
+    </div>
+
+    <script>
+        var refreshListIntervalValue = 15000;
+        var refreshListInterval = null;
+
+        function startRefreshListInterval() {
+            refreshListInterval = setInterval(fetchAvailableNetworks, refreshListIntervalValue);
+        }
+
+        function stopRefreshListInterval() {
+            if (refreshListInterval != null) {
+                clearInterval(refreshListInterval);
+                refreshListInterval = null;
+            }
+        }
+
+        // Function to update WiFi settings
+        async function updateWiFiSettings() {
+            var ssid = document.getElementById('ssid').value;
+            var pwd = document.getElementById('password').value;
+
+            await fetch('/updateWiFi', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ssid': ssid,
+                    'password': pwd,
+                },
+            })
+                .then(() => {
+                    console.log('WiFi settings updated successfully.');
+
+                    // Clear SSID and password fields
+                    document.getElementById('ssid').value = '';
+                    document.getElementById('password').value = '';
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+        }
+
+        // Function to fetch and display available networks
+        async function fetchAvailableNetworks() {
+            stopRefreshListInterval();
+            await fetch('/getAvailableNetworks')
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    var selectElement = document.getElementById('available-networks');
+                    selectElement.innerHTML = '';
+                    data.forEach(network => {
+                        var option = document.createElement('option');
+                        option.value = network.ssid;
+                        option.text = network.ssid;
+                        selectElement.add(option);
+                    });
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+            startRefreshListInterval();
+        }
+
+        // Function to update SSID field when a network is selected
+        function updateSSIDField() {
+            var selectElement = document.getElementById('available-networks');
+            var ssidField = document.getElementById('ssid');
+            ssidField.value = selectElement.value;
+        }
+
+        fetchAvailableNetworks();
+    </script>
+
+</body>
+
+</html>
