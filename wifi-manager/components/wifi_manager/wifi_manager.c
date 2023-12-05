@@ -135,7 +135,7 @@ static void connect_wifi()
 	}
 	else if (IS_STA_CONFIG_REQ_BIT(evtGrpBits)) // This will happen when credentials are updated.
 	{
-		ESP_LOGI(TAG, "Performing disconnect due to STA_CONFIG_REQ");
+		ESP_LOGD(TAG, "Performing disconnect due to STA_CONFIG_REQ");
 		xEventGroupClearBits(wifi_status_events_group, STA_CONFIG_REQ_BIT);
 		esp_wifi_disconnect();
 	}
@@ -312,7 +312,7 @@ void stop_esp_wifi()
 
 static void make_aps_list_unique()
 {
-	ESP_LOGI(TAG, "Removing duplicate Aps.");
+	ESP_LOGD(TAG, "Removing duplicate Aps.");
 	for (int i = 0; i < scanned_aps_count; i++)
 	{
 		if (scanned_aps_list[i].ssid == NULL)
@@ -338,13 +338,12 @@ static void make_aps_list_unique()
 
 void update_networks_list()
 {
-	ESP_LOGI(TAG, "Updating networks list.");
 	if (xSemaphoreTake(wifi_list_mutex, portMAX_DELAY) != pdTRUE)
 	{
 		ESP_LOGE(TAG, "Error getting wifi_list_mutex.");
 		return;
 	}
-
+	ESP_LOGI(TAG, "Updating networks list.");
 	esp_wifi_scan_get_ap_num(&scanned_aps_count);
 	if (scanned_aps_count <= 0)
 	{
@@ -360,7 +359,7 @@ void update_networks_list()
 	esp_wifi_scan_get_ap_records(&scanned_aps_count, scanned_aps_list);
 	make_aps_list_unique();
 
-	ESP_LOGI(TAG, "cJSON_CreateArray.");
+	ESP_LOGD(TAG, "cJSON_CreateArray.");
 	cJSON *json_array = cJSON_CreateArray();
 	if (json_array != NULL)
 	{
@@ -368,8 +367,8 @@ void update_networks_list()
 
 		for (int i = 0; i < scanned_aps_count; i++)
 		{
-			ESP_LOGI(TAG, "cJSON_CreateObjects.");
-			ESP_LOGI(TAG, "ssid %d: %s", i, scanned_aps_list[i].ssid);
+			ESP_LOGD(TAG, "cJSON_CreateObjects.");
+			ESP_LOGD(TAG, "ssid %d: %s", i, scanned_aps_list[i].ssid);
 			json_obj = cJSON_CreateObject();
 			if (json_obj)
 			{
@@ -378,16 +377,20 @@ void update_networks_list()
 				// cJSON_Delete(json_obj), json_obj = NULL;
 			}
 		}
+		if (ap_json_list)
+			cJSON_free(ap_json_list), ap_json_list = NULL;
+
 		ap_json_list = cJSON_Print(json_array);
-		ESP_LOGI(TAG, "Updated List: %s", ap_json_list);
-		xSemaphoreGive(wifi_list_mutex);
+		cJSON_Delete(json_array);
+		ESP_LOGD(TAG, "Updated List: %s", ap_json_list);
+		ESP_LOGI(TAG, "Networks list has been updated.");
 	}
+	xSemaphoreGive(wifi_list_mutex);
 }
 
 char *get_available_networks_list()
 {
-	ESP_LOGI(TAG, "Getting network's list");
-	if (scanned_aps_count <= 0)
+	if (!ap_json_list || strlen(ap_json_list) < 2) // atleast for json "{}"
 	{
 		ESP_LOGE(TAG, "Network list is not available.");
 		return 0;
@@ -398,15 +401,15 @@ char *get_available_networks_list()
 		ESP_LOGE(TAG, "Error getting wifi_list_mutex.");
 		return 0;
 	}
-
+	ESP_LOGI(TAG, "Getting network's list");
 	size_t list_len = strlen(ap_json_list) * sizeof(char);
-	char *scanned_list = (char *)malloc(list_len);
+	char *scanned_list = (char *)malloc(list_len * sizeof(char));
 	memset(scanned_list, 0x00, list_len);
-	ESP_LOGI(TAG, "Copy list.");
-	strcpy(scanned_list, ap_json_list);
-	ESP_LOGI(TAG, "Network's list is %s", scanned_list);
+	ESP_LOGD(TAG, "Copy list.");
+	memcpy(scanned_list, ap_json_list, list_len);
+	ESP_LOGD(TAG, "Network's list is %s", scanned_list);
 	xSemaphoreGive(wifi_list_mutex);
-
+	ESP_LOGI(TAG, "Networks liat is sent.");
 	return scanned_list;
 }
 
@@ -414,7 +417,6 @@ esp_err_t save_sta_config(wifi_config_t config)
 {
 	nvs_handle handle;
 	esp_err_t esp_err;
-	size_t sz;
 
 	ESP_LOGI(TAG, "Saving config to flash.");
 
@@ -430,6 +432,7 @@ esp_err_t save_sta_config(wifi_config_t config)
 		esp_err = nvs_set_blob(handle, WIFI_SSID_KEY, config.sta.ssid, MAX_SSID_LEN);
 		if (esp_err != ESP_OK)
 		{
+			nvs_close(handle);
 			xSemaphoreGive(nvs_mutex);
 			return esp_err;
 		}
@@ -437,11 +440,13 @@ esp_err_t save_sta_config(wifi_config_t config)
 		esp_err = nvs_set_blob(handle, WIFI_PASSWORD_KEY, config.sta.password, MAX_PASSPHRASE_LEN);
 		if (esp_err != ESP_OK)
 		{
+			nvs_close(handle);
 			xSemaphoreGive(nvs_mutex);
 			return esp_err;
 		}
 
 		ESP_LOGI(TAG, "Config saved to flash.");
+		nvs_close(handle);
 		xSemaphoreGive(nvs_mutex);
 	}
 	else
@@ -466,6 +471,7 @@ bool load_wifi_sta_config()
 
 		if (wifi_sta_config == NULL)
 		{
+			ESP_LOGI(TAG, "Allocating memory for wifi_sta_config");
 			wifi_sta_config = (wifi_config_t *)malloc(sizeof(wifi_config_t));
 		}
 		memset(wifi_sta_config, 0x00, sizeof(wifi_config_t));
@@ -475,6 +481,7 @@ bool load_wifi_sta_config()
 		esp_err = nvs_get_blob(handle, WIFI_SSID_KEY, ssid_value, &size);
 		if (esp_err != ESP_OK)
 		{
+			nvs_close(handle);
 			xSemaphoreGive(nvs_mutex);
 			return false;
 		}
@@ -486,12 +493,14 @@ bool load_wifi_sta_config()
 		esp_err = nvs_get_blob(handle, WIFI_PASSWORD_KEY, password_value, &size);
 		if (esp_err != ESP_OK)
 		{
+			nvs_close(handle);
 			xSemaphoreGive(nvs_mutex);
 			return false;
 		}
 		ESP_LOGD(TAG, "Loaded pwd: %s", password_value);
 		memcpy(wifi_sta_config->sta.password, password_value, size);
-		ESP_LOGI(TAG, "load_wifi_sta_config: ssid:%s password:%s", wifi_sta_config->sta.ssid, wifi_sta_config->sta.password);
+		ESP_LOGI(TAG, "load_wifi_sta_config: ssid:%s", wifi_sta_config->sta.ssid);
+		nvs_close(handle);
 		xSemaphoreGive(nvs_mutex);
 		return true;
 	}

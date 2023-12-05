@@ -80,13 +80,13 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 		ssid_len = httpd_req_get_hdr_value_len(req, WIFI_SSID_KEY);
 		password_len = httpd_req_get_hdr_value_len(req, WIFI_PASSWORD_KEY);
 
-		ESP_LOGI(TAG, "Updating wifi credentials with ssid_len %d and password_len %d.", ssid_len, password_len);
+		ESP_LOGD(TAG, "Updating wifi credentials with ssid_len %d and password_len %d.", ssid_len, password_len);
 
 		if (ssid_len && ssid_len <= MAX_SSID_LEN && password_len && password_len <= MAX_PASSPHRASE_LEN)
 		{
 			/* get the actual value of the headers */
-			ssid = malloc(sizeof(char) * (ssid_len + 1));
-			password = malloc(sizeof(char) * (password_len + 1));
+			ssid = (char *)malloc(sizeof(char) * (ssid_len + 1));
+			password = (char *)malloc(sizeof(char) * (password_len + 1));
 			httpd_req_get_hdr_value_str(req, WIFI_SSID_KEY, ssid, ssid_len + 1);
 			httpd_req_get_hdr_value_str(req, WIFI_PASSWORD_KEY, password, password_len + 1);
 
@@ -133,18 +133,26 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 			return ESP_OK;
 		}
 
-		ESP_LOGI(TAG, "APs List: %s", aps_list);
+		ESP_LOGD(TAG, "APs List: %s", aps_list);
 
 		httpd_resp_set_status(req, HTTPD_200);
 		httpd_resp_set_type(req, HTTPD_TYPE_JSON);
 		httpd_resp_send(req, aps_list, strlen(aps_list));
-		free(aps_list), aps_list = NULL;
 
+		if (aps_list)
+		{
+			ESP_LOGI(TAG, "APs List size: %d", (int)strlen(aps_list));
+			free(aps_list), aps_list = NULL;
+		}
+		else
+		{
+			ESP_LOGI(TAG, "aps_list already NULL");
+		}
 		return ESP_OK;
 	}
 	else if (strcmp(req->uri, wifi_logo_url) == 0)
 	{
-		ESP_LOGI(TAG, "Sending logo.");
+		ESP_LOGD(TAG, "Sending logo.");
 		httpd_resp_set_status(req, HTTPD_200);
 		httpd_resp_set_type(req, contentType_png);
 		httpd_resp_send(req, (char *)logo_start, logo_end - logo_start);
