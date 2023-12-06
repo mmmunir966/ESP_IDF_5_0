@@ -7,14 +7,20 @@ esp_err_t (*custom_get_httpd_uri_handler)(httpd_req_t *r) = NULL;
 esp_err_t (*custom_post_httpd_uri_handler)(httpd_req_t *r) = NULL;
 
 /* strings holding the URLs of the wifi manager */
-static char *http_root_url = "/";
-static char *wifi_logo_url = "/logo.png";
-static char *wifi_connect_url = "/updateWiFi";
-static char *wifi_ap_list_url = "/getAvailableNetworks";
+static char *http_index_html_url = "/";
+static char *http_styles_css_url = "/styles.css";
+static char *http_common_js_url = "/common.js";
+static char *http_logo_url = "/logo.png";
+static char *http_update_wifi_cr_url = "/updateWiFi";
+static char *http_get_networks_url = "/getAvailableNetworks";
 
 /* Embedd html file*/
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[] asm("_binary_index_html_end");
+extern const uint8_t styles_css_start[] asm("_binary_styles_css_start");
+extern const uint8_t styles_css_end[] asm("_binary_styles_css_end");
+extern const uint8_t common_js_start[] asm("_binary_common_js_start");
+extern const uint8_t common_js_end[] asm("_binary_common_js_end");
 extern const uint8_t logo_start[] asm("_binary_logo_png_start");
 extern const uint8_t logo_end[] asm("_binary_logo_png_end");
 
@@ -27,6 +33,9 @@ static const char http_cache_control_no_cache[] = "no-store, no-cache, must-reva
 
 static const char *WIFI_SSID_KEY = "ssid";
 static const char *WIFI_PASSWORD_KEY = "password";
+
+static const char HTTPD_TYPE_JS[] = "text/javascript";
+static const char HTTPD_TYPE_CSS[] = "text/css";
 
 static esp_err_t http_get_request_handler(httpd_req_t *req);
 static esp_err_t http_post_request_handler(httpd_req_t *req);
@@ -71,7 +80,7 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "POST %s", req->uri);
 
-	if (strcmp(req->uri, wifi_connect_url) == 0)
+	if (strcmp(req->uri, http_update_wifi_cr_url) == 0)
 	{
 		char *ssid = NULL;
 		char *password = NULL;
@@ -117,13 +126,33 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "GET %s", req->uri);
 
-	if (strcmp(req->uri, http_root_url) == 0)
+	if (strcmp(req->uri, http_index_html_url) == 0)
 	{
 		httpd_resp_set_status(req, http_200_hdr);
 		httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
 		httpd_resp_send(req, (char *)index_html_start, index_html_end - index_html_start);
 	}
-	else if (strcmp(req->uri, wifi_ap_list_url) == 0)
+	else if (strcmp(req->uri, http_styles_css_url) == 0)
+	{
+		httpd_resp_set_status(req, http_200_hdr);
+		httpd_resp_set_type(req, HTTPD_TYPE_CSS);
+		httpd_resp_send(req, (char *)styles_css_start, styles_css_end - styles_css_start);
+	}
+	else if (strcmp(req->uri, http_common_js_url) == 0)
+	{
+		httpd_resp_set_status(req, http_200_hdr);
+		httpd_resp_set_type(req, HTTPD_TYPE_JS);
+		httpd_resp_send(req, (char *)common_js_start, common_js_end - common_js_start);
+	}
+	else if (strcmp(req->uri, http_logo_url) == 0)
+	{
+		ESP_LOGD(TAG, "Sending logo.");
+		httpd_resp_set_status(req, HTTPD_200);
+		httpd_resp_set_type(req, contentType_png);
+		httpd_resp_send(req, (char *)logo_start, logo_end - logo_start);
+		return ESP_OK;
+	}
+	else if (strcmp(req->uri, http_get_networks_url) == 0)
 	{
 		char *aps_list = get_available_networks_list();
 		if (aps_list == NULL)
@@ -148,14 +177,6 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 		{
 			ESP_LOGI(TAG, "aps_list already NULL");
 		}
-		return ESP_OK;
-	}
-	else if (strcmp(req->uri, wifi_logo_url) == 0)
-	{
-		ESP_LOGD(TAG, "Sending logo.");
-		httpd_resp_set_status(req, HTTPD_200);
-		httpd_resp_set_type(req, contentType_png);
-		httpd_resp_send(req, (char *)logo_start, logo_end - logo_start);
 		return ESP_OK;
 	}
 

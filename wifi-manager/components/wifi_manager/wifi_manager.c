@@ -406,7 +406,7 @@ char *get_available_networks_list()
 	char *scanned_list = (char *)malloc(list_len * sizeof(char));
 	memset(scanned_list, 0x00, list_len);
 	ESP_LOGD(TAG, "Copy list.");
-	memcpy(scanned_list, ap_json_list, list_len);
+	strcpy(scanned_list, ap_json_list);
 	ESP_LOGD(TAG, "Network's list is %s", scanned_list);
 	xSemaphoreGive(wifi_list_mutex);
 	ESP_LOGI(TAG, "Networks liat is sent.");
