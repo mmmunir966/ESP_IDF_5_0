@@ -18,7 +18,6 @@
 #include "esp_log.h"
 #include "lwip/sys.h"
 #include "nvs_flash.h"
-#include "cJSON.h"
 
 #define DEFAULT_AP_SSID "ESP32_WiFI_MANAGER"
 #define DEFAULT_AP_PASSWORD "Password"

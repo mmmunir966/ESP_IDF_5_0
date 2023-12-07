@@ -15,19 +15,22 @@ static const int CLIENT_CONNECTED_BIT = BIT6;
 #define IS_WIFI_SCANNING_BIT(x) (x & WIFI_SCANNING_BIT)
 #define IS_AP_START_REQ_BIT(x) (x & AP_START_REQ_BIT)
 #define IS_CLIENT_CONNECTED_BIT(x) (x & CLIENT_CONNECTED_BIT)
+#define MAX_AP_NUM 12
+#define SINGLE_AP_SIZE 45 // {"ssid":"32 bytes size"},
 
 static const char TAG[] = "wifi_manager";
 static const char wifi_nvs_namespace[] = "espwifimgr";
 static const char *WIFI_SSID_KEY = "ssid";
 static const char *WIFI_PASSWORD_KEY = "password";
-static char *ap_json_list = NULL;
 
 static esp_netif_t *sta_netif = NULL;
 static esp_netif_t *ap_netif = NULL;
 static EventGroupHandle_t wifi_status_events_group = NULL;
 
 static uint16_t scanned_aps_count = 0;
-static wifi_ap_record_t *scanned_aps_list = NULL;
+static wifi_ap_record_t *scanned_aps_list = NULL; // holds record from WiFi list scanner.
+static char *ap_json_list = NULL;				  // Holds a json string fro found aps.
+static char *scanned_list = NULL;				  // ap_json_list data is copied to scanned_list when requested from http server to avoid data corruptions.
 static wifi_config_t *wifi_sta_config = NULL;
 
 static SemaphoreHandle_t wifi_connectivity_mutex = NULL;
@@ -48,6 +51,9 @@ void start_wifi_manager()
 	wifi_list_mutex = xSemaphoreCreateMutex();
 	nvs_mutex = xSemaphoreCreateMutex();
 
+	scanned_aps_list = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * MAX_AP_NUM);
+	ap_json_list = (char *)malloc(MAX_AP_NUM * SINGLE_AP_SIZE + 4);
+	scanned_list = (char *)malloc(MAX_AP_NUM * SINGLE_AP_SIZE + 4);
 	/* initialize the tcp stack */
 	ESP_ERROR_CHECK(esp_netif_init());
 
@@ -128,7 +134,7 @@ static void connect_wifi()
 		}
 		else
 		{
-			ESP_LOGI(TAG, "No credentials found for wifi sta mode.");
+			ESP_LOGW(TAG, "No credentials found for wifi sta mode.");
 			enable_ap_sta_modes();
 			perform_network_scanning();
 		}
@@ -351,65 +357,45 @@ void update_networks_list()
 		xSemaphoreGive(wifi_list_mutex);
 		return;
 	}
-
-	if (scanned_aps_list)
-		free(scanned_aps_list), scanned_aps_list = NULL;
-
-	scanned_aps_list = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * scanned_aps_count);
+	scanned_aps_count = MAX_AP_NUM;
 	esp_wifi_scan_get_ap_records(&scanned_aps_count, scanned_aps_list);
 	make_aps_list_unique();
 
-	ESP_LOGD(TAG, "cJSON_CreateArray.");
-	cJSON *json_array = cJSON_CreateArray();
-	if (json_array != NULL)
+	strcpy(ap_json_list, "[");
+	const char single_ap_json[] = "{\"ssid\":\"%s\"}%c\n";
+
+	for (uint16_t i = 0; i < scanned_aps_count; i++)
 	{
-		cJSON *json_obj = NULL;
+		wifi_ap_record_t ap = scanned_aps_list[i];
 
-		for (int i = 0; i < scanned_aps_count; i++)
-		{
-			ESP_LOGD(TAG, "cJSON_CreateObjects.");
-			ESP_LOGD(TAG, "ssid %d: %s", i, scanned_aps_list[i].ssid);
-			json_obj = cJSON_CreateObject();
-			if (json_obj)
-			{
-				cJSON_AddStringToObject(json_obj, "ssid", (char *)scanned_aps_list[i].ssid);
-				cJSON_AddItemToArray(json_array, json_obj);
-				// cJSON_Delete(json_obj), json_obj = NULL;
-			}
-		}
-		if (ap_json_list)
-			cJSON_free(ap_json_list), ap_json_list = NULL;
+		char single_ap[SINGLE_AP_SIZE] = {0};
 
-		ap_json_list = cJSON_Print(json_array);
-		cJSON_Delete(json_array);
-		ESP_LOGD(TAG, "Updated List: %s", ap_json_list);
-		ESP_LOGI(TAG, "Networks list has been updated.");
+		/* print the rest of the json for this access point: no more string to escape */
+		snprintf(single_ap, (size_t)SINGLE_AP_SIZE, single_ap_json, scanned_aps_list[i].ssid, i == scanned_aps_count - 1 ? ']' : ',');
+
+		/* add it to the list */
+		strcat(ap_json_list, single_ap);
 	}
+	ESP_LOGD(TAG, "Updated List: %s", ap_json_list);
+	ESP_LOGI(TAG, "Networks list has been updated.");
+
 	xSemaphoreGive(wifi_list_mutex);
 }
 
 char *get_available_networks_list()
 {
-	if (!ap_json_list || strlen(ap_json_list) < 2) // atleast for json "{}"
-	{
-		ESP_LOGE(TAG, "Network list is not available.");
-		return 0;
-	}
-
 	if (xSemaphoreTake(wifi_list_mutex, portMAX_DELAY) != pdTRUE)
 	{
 		ESP_LOGE(TAG, "Error getting wifi_list_mutex.");
 		return 0;
 	}
 	ESP_LOGI(TAG, "Getting network's list");
-	size_t list_len = strlen(ap_json_list) * sizeof(char);
-	char *scanned_list = (char *)malloc(list_len * sizeof(char));
+	size_t list_len = MAX_AP_NUM * SINGLE_AP_SIZE + 4;
 	memset(scanned_list, 0x00, list_len);
-	ESP_LOGD(TAG, "Copy list.");
 	strcpy(scanned_list, ap_json_list);
 	ESP_LOGD(TAG, "Network's list is %s", scanned_list);
 	xSemaphoreGive(wifi_list_mutex);
-	ESP_LOGI(TAG, "Networks liat is sent.");
+	ESP_LOGI(TAG, "Networks list is sent.");
 	return scanned_list;
 }
 

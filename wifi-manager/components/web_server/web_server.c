@@ -110,8 +110,15 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 			httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
 			httpd_resp_send(req, NULL, 0);
 
-			free(ssid), ssid = NULL;
-			free(password), password = NULL;
+			if (ssid)
+			{
+				free(ssid), ssid = NULL;
+			}
+
+			if (password)
+			{
+				free(password), password = NULL;
+			}
 			return ESP_OK;
 		}
 	}
@@ -167,16 +174,6 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 		httpd_resp_set_status(req, HTTPD_200);
 		httpd_resp_set_type(req, HTTPD_TYPE_JSON);
 		httpd_resp_send(req, aps_list, strlen(aps_list));
-
-		if (aps_list)
-		{
-			ESP_LOGI(TAG, "APs List size: %d", (int)strlen(aps_list));
-			free(aps_list), aps_list = NULL;
-		}
-		else
-		{
-			ESP_LOGI(TAG, "aps_list already NULL");
-		}
 		return ESP_OK;
 	}
 
