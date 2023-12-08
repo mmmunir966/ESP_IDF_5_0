@@ -30,16 +30,43 @@
 #define DEFAULT_AP_MAX_CONNECTIONS 4
 #define DEFAULT_AP_BEACON_INTERVAL 100 // Should be multiple of 100.
 
+/**
+ * @brief start_wifi_manager
+ * Start the wifi manager
+ */
 void start_wifi_manager();
 
+/**
+ * @brief stop_wifi_manager
+ * Stop the wifi manager
+ */
 void stop_wifi_manager();
 
+/**
+ * @brief get_available_networks_list
+ * returns the list of networks in json format. Contains the ssid name for each of the network.
+ * [{"ssid"::"string value"},{"ssid":"string value"}]
+ *
+ * @return Pointer to the json list.
+ */
 char *get_available_networks_list();
 
+/**
+ * @brief is_wifi_connected
+ * Check either the device is connected to a router or not.
+ *
+ * @return true: If thge device is connected.
+ *         false: If the device is disconnected.
+ */
 bool is_wifi_connected();
 
+/**
+ * @brief update_sta_config
+ * Update credentials for sta mopde of device to connect it to a router.
+ *
+ * @param config: wifi_config_t type
+ */
 void update_sta_config(wifi_config_t config);
 
-bool is_wifi_connected();
 
 #endif /* WIFI_MANAGER_H*/

@@ -15,12 +15,12 @@
 
 
 /** 
- * @brief start the http server 
+ * @brief start the web server 
  */
 void start_web_server();
 
 /**
- * @brief stops the http server 
+ * @brief stops the web server 
  */
 void stop_web_server();
 
