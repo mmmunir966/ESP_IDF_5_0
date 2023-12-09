@@ -85,8 +85,8 @@ void stop_wifi_manager()
 	stop_esp_wifi();
 	ESP_ERROR_CHECK(esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler));
 	ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler));
-	esp_netif_destroy_default_wifi(sta_netif);
-	esp_netif_destroy_default_wifi(ap_netif);
+	// esp_netif_destroy_default_wifi(sta_netif);
+	// esp_netif_destroy_default_wifi(ap_netif);
 }
 
 static void perform_network_scanning()
