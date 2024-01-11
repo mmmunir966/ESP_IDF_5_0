@@ -343,9 +343,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
 
 static void mqtt_app_start(void)
 {
-	const esp_mqtt_client_config_t mqtt_cfg;
-	// mqtt_cfg.broker.address.uri = CONFIG_BROKER_URI;
-	// mqtt_cfg.broker.verification.certificate = (const char *)mqtt_eclipseprojects_io_pem_start;
+
+	const esp_mqtt_client_config_t mqtt_cfg = {
+		.uri = CONFIG_BROKER_URI,
+		.cert_pem = (const char *)mqtt_eclipseprojects_io_pem_start,
+	};
 
 	ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
 	client = esp_mqtt_client_init(&mqtt_cfg);

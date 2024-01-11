@@ -1,5 +1,9 @@
 #include "wifi_manager.h"
+#include <driver/gpio.h>
 
+#define BUTTON_PIN 23
+
+static int reset_timer_timeout = 10000;		// time in ms.
 static const int WIFI_CONNECTED_BIT = BIT0; // ok
 static const int WIFI_CONNECTING_BIT = BIT1;
 static const int AP_STARTED_BIT = BIT2;
@@ -36,20 +40,41 @@ static wifi_config_t *wifi_sta_config = NULL;
 static SemaphoreHandle_t wifi_connectivity_mutex = NULL;
 static SemaphoreHandle_t wifi_list_mutex = NULL;
 static SemaphoreHandle_t nvs_mutex = NULL;
+static TimerHandle_t reset_timer_handle = NULL;
 
 static void wifi_event_handler(void *args, esp_event_base_t base_event, int32_t event_id, void *event_data);
 static esp_err_t save_sta_config(wifi_config_t config);
+static esp_err_t reset_sta_config();
 static void update_networks_list();
 static bool load_wifi_sta_config();
 static void enable_ap_sta_modes();
 static void stop_esp_wifi();
+static void reset_timer_cb(TimerHandle_t xTimer);
+static void start_reset_timer(TimerHandle_t xTimer);
+static void stop_reset_timer(TimerHandle_t xTimer);
+static void button_ISR_handler(void *arg);
 
 void start_wifi_manager()
 {
+	reset_timer_handle = xTimerCreate("Reset_Timer", pdMS_TO_TICKS(reset_timer_timeout), pdFALSE, (void *)0, *reset_timer_cb);
 	wifi_status_events_group = xEventGroupCreate();
 	wifi_connectivity_mutex = xSemaphoreCreateMutex();
 	wifi_list_mutex = xSemaphoreCreateMutex();
 	nvs_mutex = xSemaphoreCreateMutex();
+
+	// Setup the push button GPIO as input
+	gpio_config_t button_config = {
+		.pin_bit_mask = (1ULL << BUTTON_PIN),
+		.mode = GPIO_MODE_INPUT,
+		.intr_type = GPIO_INTR_ANYEDGE,
+		.pull_up_en = GPIO_PULLUP_ENABLE,
+		.pull_down_en = GPIO_PULLDOWN_DISABLE,
+	};
+	gpio_config(&button_config);
+	// Install ISR service
+	gpio_install_isr_service(0);
+	// Hook ISR handler to the GPIO pin
+	gpio_isr_handler_add(BUTTON_PIN, button_ISR_handler, (void *)BUTTON_PIN);
 
 	scanned_aps_list = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * MAX_AP_NUM);
 	ap_json_list = (char *)malloc(MAX_AP_NUM * SINGLE_AP_SIZE + 4);
@@ -85,8 +110,6 @@ void stop_wifi_manager()
 	stop_esp_wifi();
 	ESP_ERROR_CHECK(esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler));
 	ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler));
-	// esp_netif_destroy_default_wifi(sta_netif);
-	// esp_netif_destroy_default_wifi(ap_netif);
 }
 
 static void perform_network_scanning()
@@ -130,11 +153,17 @@ static void connect_wifi()
 	{
 		xEventGroupClearBits(wifi_status_events_group, STA_CONFIG_REQ_BIT);
 
+		wifi_config_t *wifi_config = NULL;
 		if (load_wifi_sta_config())
 		{
+			wifi_config = get_wifi_sta_config();
+		}
+
+		if (wifi_config->sta.ssid)
+		{
 			xEventGroupSetBits(wifi_status_events_group, WIFI_CONNECTING_BIT);
-			ESP_LOGI(TAG, "Saved wifi credentials found. Attempting to connect.");
-			ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, get_wifi_sta_config()));
+			ESP_LOGI(TAG, "Saved wifi credentials found. Attempting to connect to %s.", wifi_config->sta.ssid);
+			ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifi_config));
 			esp_wifi_connect();
 		}
 		else
@@ -500,4 +529,91 @@ bool load_wifi_sta_config()
 		ESP_LOGE(TAG, "load_wifi_sta_config failed to acquire nvs_mutex");
 	}
 	return false;
+}
+
+esp_err_t reset_sta_config()
+{
+	nvs_handle handle;
+	esp_err_t esp_err;
+
+	if (nvs_mutex && xSemaphoreTake(nvs_mutex, portMAX_DELAY))
+	{
+		esp_err = nvs_open(wifi_nvs_namespace, NVS_READWRITE, &handle);
+		if (esp_err != ESP_OK)
+		{
+			xSemaphoreGive(nvs_mutex);
+			return esp_err;
+		}
+
+		esp_err = nvs_erase_key(handle, WIFI_SSID_KEY);
+		if (esp_err != ESP_OK)
+		{
+			ESP_LOGI(TAG, "STA configurations are already reset.");
+			nvs_close(handle);
+			xSemaphoreGive(nvs_mutex);
+			return esp_err;
+		}
+
+		esp_err = nvs_erase_key(handle, WIFI_PASSWORD_KEY);
+		if (esp_err != ESP_OK)
+		{
+			ESP_LOGI(TAG, "STA configurations are already reset.");
+			nvs_close(handle);
+			xSemaphoreGive(nvs_mutex);
+			return esp_err;
+		}
+
+		ESP_LOGI(TAG, "STA configurations are reset.");
+		nvs_close(handle);
+		xSemaphoreGive(nvs_mutex);
+	}
+	else
+	{
+		ESP_LOGE(TAG, "save_sta_config failed to acquire nvs_mutex");
+	}
+
+	return ESP_OK;
+}
+
+void reset_timer_cb(TimerHandle_t xTimer)
+{
+	stop_reset_timer(xTimer);
+	ESP_LOGI(TAG, "Reseting credentials");
+	reset_sta_config();
+	EventBits_t evtGrpBits = xEventGroupGetBits(wifi_status_events_group);
+	if (IS_WIFI_CONNECTED_BIT(evtGrpBits))
+	{
+		esp_wifi_disconnect();
+	}
+}
+
+void start_reset_timer(TimerHandle_t xTimer)
+{
+	if (xTimer != NULL && xTimerIsTimerActive(xTimer) == pdFALSE)
+		xTimerStart(xTimer, (TickType_t)0);
+}
+
+void stop_reset_timer(TimerHandle_t xTimer)
+{
+	if (xTimer != NULL && xTimerIsTimerActive(xTimer) == pdTRUE)
+		xTimerStop(xTimer, (TickType_t)0);
+}
+
+void button_ISR_handler(void *arg)
+{
+
+	// Get the GPIO status
+	uint32_t gpio_status = GPIO.status;
+
+	if (gpio_status & (1 << BUTTON_PIN)) // Check if the interrupt is caused by a positive edge
+	{
+		start_reset_timer(reset_timer_handle);
+	}
+	else // Check if the interrupt is caused by a negative edge
+	{
+		stop_reset_timer(reset_timer_handle);
+	}
+
+	// Clear the interrupt status
+	GPIO.status_w1tc = gpio_status;
 }
