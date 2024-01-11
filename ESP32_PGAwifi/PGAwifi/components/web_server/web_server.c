@@ -91,7 +91,7 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 
 		ESP_LOGD(TAG, "Updating wifi credentials with ssid_len %d and password_len %d.", ssid_len, password_len);
 
-		if (ssid_len && ssid_len <= MAX_SSID_LEN && password_len && password_len <= MAX_PASSPHRASE_LEN)
+		if (ssid_len && ssid_len <= MAX_SSID_LEN)
 		{
 			/* get the actual value of the headers */
 			ssid = (char *)malloc(sizeof(char) * (ssid_len + 1));

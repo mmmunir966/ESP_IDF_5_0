@@ -601,11 +601,10 @@ void stop_reset_timer(TimerHandle_t xTimer)
 
 void button_ISR_handler(void *arg)
 {
-
 	// Get the GPIO status
 	uint32_t gpio_status = GPIO.status;
 
-	if (gpio_status & (1 << BUTTON_PIN)) // Check if the interrupt is caused by a positive edge
+	if (gpio_get_level(BUTTON_PIN) == 1) // Check if the interrupt is caused by a positive edge
 	{
 		start_reset_timer(reset_timer_handle);
 	}
