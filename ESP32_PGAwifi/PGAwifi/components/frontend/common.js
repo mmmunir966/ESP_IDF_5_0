@@ -12,48 +12,73 @@ function stopRefreshListInterval() {
     }
 }
 
-async function updateWiFiSettings() {
+
+function updateWiFiSettings() {
     var ssid = document.getElementById('ssid').value;
     var pwd = document.getElementById('password').value;
 
-    await fetch('/updateWiFi', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'ssid': ssid,
-            'password': pwd,
-        },
-    })
-        .then(() => {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/updateWiFi', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('ssid', ssid);
+    xhr.setRequestHeader('password', pwd);
+
+    xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            var data = JSON.parse(xhr.responseText);
             console.log('WiFi settings updated successfully.');
 
             document.getElementById('ssid').value = '';
             document.getElementById('password').value = '';
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-        });
+        } else {
+            console.error('Error:', xhr.statusText);
+        }
+    };
+
+    xhr.onerror = function () {
+        console.error('Request failed');
+    };
+
+    xhr.send();
 }
 
-async function fetchAvailableNetworks() {
+
+function fetchAvailableNetworks() {
     stopRefreshListInterval();
-    await fetch('/getAvailableNetworks')
-        .then(response => response.json())
-        .then(data => {
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/getAvailableNetworks', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            var data = JSON.parse(xhr.responseText);
             var selectElement = document.getElementById('available-networks');
             selectElement.innerHTML = '';
-            data.forEach(network => {
+
+            data.forEach(function (network) {
                 var option = document.createElement('option');
                 option.value = network.ssid;
                 option.text = network.ssid;
                 selectElement.add(option);
             });
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-        });
-    startRefreshListInterval();
+
+            startRefreshListInterval();
+        } else {
+            console.error('Error:', xhr.statusText);
+            startRefreshListInterval(); // Ensure interval restarts even in case of an error
+        }
+    };
+
+    xhr.onerror = function () {
+        console.error('Request failed');
+        startRefreshListInterval(); // Ensure interval restarts even in case of an error
+    };
+
+    xhr.send();
 }
+
+
 
 function updateSSIDField() {
     var selectElement = document.getElementById('available-networks');

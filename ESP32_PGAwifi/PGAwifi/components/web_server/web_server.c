@@ -80,6 +80,11 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "POST %s", req->uri);
 
+	httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+	httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+	httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+	httpd_resp_set_hdr(req, "Access-Control-Max-Age", "3600");
+
 	if (strcmp(req->uri, http_update_wifi_cr_url) == 0)
 	{
 		char *ssid = NULL;
@@ -133,6 +138,12 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "GET %s", req->uri);
 
+	httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+	httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+	httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+	httpd_resp_set_hdr(req, "Access-Control-Max-Age", "3600");
+
+	httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
 	if (strcmp(req->uri, http_index_html_url) == 0)
 	{
 		httpd_resp_set_status(req, http_200_hdr);
@@ -141,6 +152,7 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 	}
 	else if (strcmp(req->uri, http_styles_css_url) == 0)
 	{
+		ESP_LOGI(TAG, "Sending styles.");
 		httpd_resp_set_status(req, http_200_hdr);
 		httpd_resp_set_type(req, HTTPD_TYPE_CSS);
 		httpd_resp_send(req, (char *)styles_css_start, styles_css_end - styles_css_start);

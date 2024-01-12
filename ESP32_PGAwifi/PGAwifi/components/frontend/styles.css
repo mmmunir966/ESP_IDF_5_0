@@ -3,9 +3,6 @@ body {
     background-color: #f4f4f4;
     margin: 0;
     padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     height: 100vh;
 }
 
@@ -15,12 +12,16 @@ body {
     padding: 20px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     width: 300px;
+    margin: 0 auto;
+    /* Center the div horizontally */
+    margin-top: 50px;
+    /* Adjust as needed */
 }
 
 #logo {
     max-width: 100%;
     height: auto;
-}
+} 
 
 label {
     display: block;
