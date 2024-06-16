@@ -99,7 +99,7 @@ int sendData(const char *logName, char *data)
 		len = Tx_length;
 	else
 	{
-		while (len == Tx_length)
+		while (len != Tx_length)
 		{
 			data[len] = 0;
 			len++;
@@ -109,6 +109,7 @@ int sendData(const char *logName, char *data)
 	ESP_LOGI(logName, "Wrote %d bytes", txBytes);
 	return txBytes;
 }
+
 void tx_task_MCU(char *data)
 {
 	static const char *TX_TASK_TAG = "TX_TASK";
@@ -142,6 +143,19 @@ void AllHex2Str(char *dest, uint8_t *src, int rxBytes)
 		else
 			dest[i] = Hex2Str(src[i / 2], 1);
 	}
+}
+void tx_data_MCU(char *data, int len)
+{
+	static const char *TX_TASK_TAG = "TX_TASK";
+	esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
+
+	int leng = strlen(data);
+	ESP_LOGI(TX_TASK_TAG, "Wrote11 %d bytes", leng);
+
+	const int txBytes = uart_write_bytes(UART_NUM_2, data, len);
+	ESP_LOGI(TX_TASK_TAG, "Wrote2 %d bytes", txBytes);
+	ESP_LOGI(TX_TASK_TAG, "Wrote3 %d bytes", len);
+	vTaskDelay(2000 / portTICK_PERIOD_MS);
 }
 
 static void rx_task(void *arg)
@@ -189,7 +203,7 @@ static void rx_task(void *arg)
 									   ESP_LOG_INFO);
 				esp_mqtt_client_publish(client, PGA_BIN_NUMBER, dataToserver,
 										length, 0, 0);
-				tx_task_MCU(dataToMcu);
+//				tx_task_MCU(dataToMcu);
 			}
 		}
 	}
@@ -286,6 +300,25 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 		}
 		gpio_set_level(GPIO_OUTPUT_IO_0, 0);
 
+		if (strncmp(event->data, "~eVh", 4) == 0)
+		{
+			int len;
+			len = event->data_len;
+			ESP_LOGI(TAG, "Sending the binary");
+			ESP_LOGI(TAG, "offset %d bytes", event->current_data_offset);
+			ESP_LOGI(TAG, "total %d bytes", event->total_data_len);
+
+			dataToMcu = event->data;
+			tx_data_MCU(dataToMcu,len);
+			//                send_binary(client);
+		}
+		if (strncmp(event->data, "updatingBINX", event->data_len - 1) == 0)
+		{
+			ESP_LOGI(TAG, "Sending the binary");
+			dataToMcu = event->data;
+			tx_task_MCU(dataToMcu);
+			//                send_binary(client);
+		}
 		if (strncmp(event->data, "request data", event->data_len - 4) == 0)
 		{
 			ESP_LOGI(TAG, "Sending the binary");
@@ -294,6 +327,18 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
 			//                send_binary(client);
 		}
 		if (strncmp(event->data, "setFANonBINX", event->data_len - 8) == 0)
+		{
+			ESP_LOGI(TAG, "Sending the binary");
+			dataToMcu = event->data;
+			tx_task_MCU(dataToMcu);
+		}
+		if (strncmp(event->data, "installation", event->data_len) == 0)
+		{
+			ESP_LOGI(TAG, "Sending the binary");
+			dataToMcu = event->data;
+			tx_task_MCU(dataToMcu);
+		}
+		if (strncmp(event->data, "end-installa", event->data_len) == 0)
 		{
 			ESP_LOGI(TAG, "Sending the binary");
 			dataToMcu = event->data;

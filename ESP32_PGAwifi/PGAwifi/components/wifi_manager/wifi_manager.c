@@ -3,7 +3,7 @@
 
 #define BUTTON_PIN 23
 
-static int reset_timer_timeout = 10000;		// time in ms.
+static int reset_timer_timeout = 2000;		// time in ms.
 static const int WIFI_CONNECTED_BIT = BIT0; // ok
 static const int WIFI_CONNECTING_BIT = BIT1;
 static const int AP_STARTED_BIT = BIT2;
@@ -66,7 +66,7 @@ void start_wifi_manager()
 	gpio_config_t button_config = {
 		.pin_bit_mask = (1ULL << BUTTON_PIN),
 		.mode = GPIO_MODE_INPUT,
-		.intr_type = GPIO_INTR_ANYEDGE,
+		.intr_type = GPIO_INTR_NEGEDGE,
 		.pull_up_en = GPIO_PULLUP_ENABLE,
 		.pull_down_en = GPIO_PULLDOWN_DISABLE,
 	};
@@ -578,12 +578,15 @@ esp_err_t reset_sta_config()
 void reset_timer_cb(TimerHandle_t xTimer)
 {
 	stop_reset_timer(xTimer);
-	ESP_LOGI(TAG, "Reseting credentials");
-	reset_sta_config();
-	EventBits_t evtGrpBits = xEventGroupGetBits(wifi_status_events_group);
-	if (IS_WIFI_CONNECTED_BIT(evtGrpBits))
+	if (gpio_get_level(BUTTON_PIN) == 0)
 	{
-		esp_wifi_disconnect();
+		ESP_LOGI(TAG, "Reseting credentials");
+		reset_sta_config();
+		EventBits_t evtGrpBits = xEventGroupGetBits(wifi_status_events_group);
+		if (IS_WIFI_CONNECTED_BIT(evtGrpBits))
+		{
+			esp_wifi_disconnect();
+		}
 	}
 }
 
@@ -601,18 +604,5 @@ void stop_reset_timer(TimerHandle_t xTimer)
 
 void button_ISR_handler(void *arg)
 {
-	// Get the GPIO status
-	uint32_t gpio_status = GPIO.status;
-
-	if (gpio_get_level(BUTTON_PIN) == 0) // Check if the interrupt is caused by a positive edge
-	{
-		start_reset_timer(reset_timer_handle);
-	}
-	else // Check if the interrupt is caused by a negative edge
-	{
-		stop_reset_timer(reset_timer_handle);
-	}
-
-	// Clear the interrupt status
-	GPIO.status_w1tc = gpio_status;
+	start_reset_timer(reset_timer_handle);
 }

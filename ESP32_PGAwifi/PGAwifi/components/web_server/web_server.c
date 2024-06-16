@@ -25,6 +25,7 @@ extern const uint8_t logo_start[] asm("_binary_logo_png_start");
 extern const uint8_t logo_end[] asm("_binary_logo_png_end");
 
 /* const httpd related values stored in ROM */
+char *redirectURL = NULL;
 static const char http_200_hdr[] = "200 OK";
 static const char http_404_hdr[] = "404 Not Found";
 static const char contentType_png[] = "image/png";
@@ -54,6 +55,16 @@ void start_web_server()
 {
 	if (httpd_handle == NULL) // Start server only if it is not running already.
 	{
+		if (redirectURL)
+			free(redirectURL), redirectURL = NULL;
+
+		/* redirect url */
+		size_t redirect_sz = strlen("http://255.255.255.255") + 1;
+		redirectURL = (char *)malloc(sizeof(char) * redirect_sz);
+		*redirectURL = '\0';
+
+		snprintf(redirectURL, redirect_sz, "http://%s", DEFAULT_AP_IP);
+
 		httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
 		config.uri_match_fn = httpd_uri_match_wildcard;
@@ -65,6 +76,7 @@ void start_web_server()
 			httpd_register_uri_handler(httpd_handle, &httpd_register_get_request);
 			httpd_register_uri_handler(httpd_handle, &httpd_register_post_request);
 		}
+		dns_start();
 	}
 }
 
@@ -73,6 +85,7 @@ void stop_web_server()
 	if (httpd_handle != NULL)
 	{
 		httpd_stop(httpd_handle), httpd_handle = NULL;
+		dns_stop();
 	}
 }
 
@@ -187,6 +200,15 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 		httpd_resp_set_type(req, HTTPD_TYPE_JSON);
 		httpd_resp_send(req, aps_list, strlen(aps_list));
 		return ESP_OK;
+	}
+	else if (strcmp(req->uri, "/generate_204") == 0 || strcmp(req->uri, "/hotspot-detect.html") == 0
+	|| strcmp(req->uri, "/connecttest.txt") == 0) // 'generate_204' for Android, 'hotspot-detect.html' for iOS, 
+	//connecttest.txt for windows
+	{
+		ESP_LOGW(TAG, "Redirecting request.");
+		httpd_resp_set_status(req, "302 Found");
+		httpd_resp_set_hdr(req, "Location", redirectURL);
+		httpd_resp_send(req, NULL, 0);
 	}
 
 	httpd_resp_set_status(req, http_404_hdr);

@@ -18,8 +18,8 @@
 #include "lwip/sys.h"
 #include "nvs_flash.h"
 
-#define DEFAULT_AP_SSID "ESP32_WiFI_MANAGER"
-#define DEFAULT_AP_PASSWORD "Password"
+#define DEFAULT_AP_SSID "PGA_WIFI_MANAGER"
+#define DEFAULT_AP_PASSWORD "password"
 #define DEFAULT_HOSTNAME "esp32"
 #define DEFAULT_AP_IP "192.168.4.1"
 #define DEFAULT_AP_GATEWAY "192.168.4.1"

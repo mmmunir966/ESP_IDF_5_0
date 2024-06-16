@@ -12,6 +12,7 @@
 #include "esp_netif.h"
 #include <esp_http_server.h>
 #include "wifi_manager.h"
+#include "dns_server.h"
 
 
 /** 
