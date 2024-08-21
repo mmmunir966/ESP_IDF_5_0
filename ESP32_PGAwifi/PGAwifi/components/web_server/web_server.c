@@ -31,6 +31,8 @@ static const char http_404_hdr[] = "404 Not Found";
 static const char contentType_png[] = "image/png";
 static const char http_cache_control_hdr[] = "Cache-Control";
 static const char http_cache_control_no_cache[] = "no-store, no-cache, must-revalidate, max-age=0";
+static const char http_pragma[] = "Pragma";
+static const char http_pragma_no_cache[] = "no-cache";
 
 static const char *WIFI_SSID_KEY = "ssid";
 static const char *WIFI_PASSWORD_KEY = "password";
@@ -59,11 +61,11 @@ void start_web_server()
 			free(redirectURL), redirectURL = NULL;
 
 		/* redirect url */
-		size_t redirect_sz = strlen("http://255.255.255.255") + 1;
+		size_t redirect_sz = strlen("http://255.255.255.255/") + 1;
 		redirectURL = (char *)malloc(sizeof(char) * redirect_sz);
 		*redirectURL = '\0';
 
-		snprintf(redirectURL, redirect_sz, "http://%s", DEFAULT_AP_IP);
+		snprintf(redirectURL, redirect_sz, "http://%s/", DEFAULT_AP_IP);
 
 		httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
@@ -97,6 +99,8 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 	httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, GET, OPTIONS");
 	httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
 	httpd_resp_set_hdr(req, "Access-Control-Max-Age", "3600");
+	httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
+	httpd_resp_set_hdr(req, http_pragma, http_pragma_no_cache);
 
 	if (strcmp(req->uri, http_update_wifi_cr_url) == 0)
 	{
@@ -150,35 +154,43 @@ static esp_err_t http_post_request_handler(httpd_req_t *req)
 static esp_err_t http_get_request_handler(httpd_req_t *req)
 {
 	ESP_LOGI(TAG, "GET %s", req->uri);
-
-	httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-	httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-	httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
 	httpd_resp_set_hdr(req, "Access-Control-Max-Age", "3600");
 
-	httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
 	if (strcmp(req->uri, http_index_html_url) == 0)
 	{
+		ESP_LOGI(TAG, "Sending index.htm file.");
+		httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
+		httpd_resp_set_hdr(req, http_pragma, http_pragma_no_cache);
 		httpd_resp_set_status(req, http_200_hdr);
 		httpd_resp_set_type(req, HTTPD_TYPE_TEXT);
 		httpd_resp_send(req, (char *)index_html_start, index_html_end - index_html_start);
+		return ESP_OK;
 	}
 	else if (strcmp(req->uri, http_styles_css_url) == 0)
 	{
-		ESP_LOGI(TAG, "Sending styles.");
+		ESP_LOGI(TAG, "Sending styles.css file.");
+		httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
+		httpd_resp_set_hdr(req, http_pragma, http_pragma_no_cache);
 		httpd_resp_set_status(req, http_200_hdr);
 		httpd_resp_set_type(req, HTTPD_TYPE_CSS);
 		httpd_resp_send(req, (char *)styles_css_start, styles_css_end - styles_css_start);
+		return ESP_OK;
 	}
 	else if (strcmp(req->uri, http_common_js_url) == 0)
 	{
+		ESP_LOGI(TAG, "Sending common.js file.");
+		httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
+		httpd_resp_set_hdr(req, http_pragma, http_pragma_no_cache);
 		httpd_resp_set_status(req, http_200_hdr);
 		httpd_resp_set_type(req, HTTPD_TYPE_JS);
 		httpd_resp_send(req, (char *)common_js_start, common_js_end - common_js_start);
+		return ESP_OK;
 	}
 	else if (strcmp(req->uri, http_logo_url) == 0)
 	{
-		ESP_LOGD(TAG, "Sending logo.");
+		ESP_LOGI(TAG, "Sending logo.png file.");
+		httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
+		httpd_resp_set_hdr(req, http_pragma, http_pragma_no_cache);
 		httpd_resp_set_status(req, HTTPD_200);
 		httpd_resp_set_type(req, contentType_png);
 		httpd_resp_send(req, (char *)logo_start, logo_end - logo_start);
@@ -186,11 +198,14 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 	}
 	else if (strcmp(req->uri, http_get_networks_url) == 0)
 	{
+		ESP_LOGI(TAG, "Sending networks list.");
+		httpd_resp_set_hdr(req, http_cache_control_hdr, http_cache_control_no_cache);
+		httpd_resp_set_hdr(req, http_pragma, http_pragma_no_cache);
 		char *aps_list = get_available_networks_list();
 		if (aps_list == NULL)
 		{
 			httpd_resp_set_status(req, HTTPD_204);
-			httpd_resp_send(req, NULL, 0);
+			httpd_resp_send(req, "{}", strlen("{}"));
 			return ESP_OK;
 		}
 
@@ -201,17 +216,11 @@ static esp_err_t http_get_request_handler(httpd_req_t *req)
 		httpd_resp_send(req, aps_list, strlen(aps_list));
 		return ESP_OK;
 	}
-	else if (strcmp(req->uri, "/generate_204") == 0 || strcmp(req->uri, "/hotspot-detect.html") == 0
-	|| strcmp(req->uri, "/connecttest.txt") == 0) // 'generate_204' for Android, 'hotspot-detect.html' for iOS, 
-	//connecttest.txt for windows
-	{
-		ESP_LOGW(TAG, "Redirecting request.");
-		httpd_resp_set_status(req, "302 Found");
-		httpd_resp_set_hdr(req, "Location", redirectURL);
-		httpd_resp_send(req, NULL, 0);
-	}
 
-	httpd_resp_set_status(req, http_404_hdr);
+	// Captive portal redirect.
+	ESP_LOGW(TAG, "Redirecting request to %s.", redirectURL);
+	httpd_resp_set_status(req, "302 Found");
+	httpd_resp_set_hdr(req, "Location", redirectURL);
 	httpd_resp_send(req, NULL, 0);
 
 	return ESP_OK;
